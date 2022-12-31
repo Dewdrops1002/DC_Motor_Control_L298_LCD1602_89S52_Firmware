@@ -1,0 +1,180 @@
+C51 COMPILER V9.60.0.0   L298_PWM                                                          12/31/2022 13:19:58 PAGE 1   
+
+
+C51 COMPILER V9.60.0.0, COMPILATION OF MODULE L298_PWM
+OBJECT MODULE PLACED IN L298 Pwm.OBJ
+COMPILER INVOKED BY: C:\Keil_V960\C51\BIN\C51.EXE L298 Pwm.c OPTIMIZE(8,SPEED) BROWSE DEBUG OBJECTEXTEND
+
+line level    source
+
+   1          #include        "REGX52.H"
+   2          #include        "stdio.H"
+   3          #include <LCD_4bit_Interface.H>
+   4          
+   5          sbit            PWM             =P2^6;
+   6          sbit            DIR             =P2^7;
+   7          sbit            KMode   =P1^0;//On/Off
+   8          sbit            KUp             =P1^1;//Up
+   9          sbit            KDown   =P1^2;//Down
+  10          sbit            KDir    =P1^3;//Direct
+  11          
+  12          unsigned int    Counter,Speed,Duty;
+  13          unsigned char Direct;
+  14          unsigned char           pMode,pDown,pDir=0,pUp;
+  15          
+  16          //unsigned char Mode,Up,Down,Direct;            
+  17          
+  18          #define         Fwd             0x41
+  19          #define         Rev             0x42
+  20          #define         Mode    0x01
+  21          #define         Up              0x02
+  22          #define         Down    0x04
+  23          #define         Dir             0x08    
+  24          
+  25          
+  26          void Delay(unsigned int t)
+  27          {
+  28   1              unsigned int i;
+  29   1              for(i=0;i<=t;i++);
+  30   1      }
+  31          
+  32          //-------------
+  33          /*
+  34          Tao xung PWM co f=500Hz =>T=2ms
+  35          20 cap toc do, => Thoi gian tran Timer=2ms/20=100uS
+  36          Dung Timer0 che do 2 (8bit Auto Reload)
+  37          */
+  38          void Configure(void)
+  39          {
+  40   1              TMOD=0x02;      //Timer0 che do 2 (Tu nap lai)
+  41   1              IE=0x82;        //Cho phep ngat timer0
+  42   1              TH0=TL0=155;
+  43   1              TR0=0;          //0 Cho phep Timer 0 chay
+  44   1      }
+  45          
+  46          
+  47          //-------------
+  48          void    Run(unsigned char Direct,unsigned int Duty1)//20 cap toc do
+  49          {
+  50   1              TR0=1;
+  51   1              if(Direct==Fwd)
+  52   1              {
+  53   2                      DIR=0;
+  54   2                      Duty=Duty1;
+  55   2              }
+C51 COMPILER V9.60.0.0   L298_PWM                                                          12/31/2022 13:19:58 PAGE 2   
+
+  56   1              
+  57   1              if(Direct==Rev)
+  58   1              {
+  59   2                      DIR=1;
+  60   2                      Duty=20-Duty1;
+  61   2              }
+  62   1      }
+  63          
+  64          
+  65          //-------------
+  66          void Stop(void)
+  67          {
+  68   1              TR0=0;
+  69   1              PWM=0;
+  70   1              DIR=0;
+  71   1      }
+  72          
+  73          //-------------
+  74          void main(void)
+  75          {
+  76   1              Delay(10);
+  77   1              Configure();
+  78   1              LcdInit();
+  79   1              
+  80   1              LcdClr();
+  81   1              LcdGoto(0,0);
+  82   1              LcdWrStr("DC Motor Control");
+  83   1              
+  84   1              Stop();
+  85   1              Speed=5;//default
+  86   1              Direct=Fwd;
+  87   1              
+  88   1              while(KMode); //Cho bam phim On/Off
+  89   1              while(!KMode);
+  90   1              LcdClr();
+  91   1              while(1)
+  92   1              {
+  93   2                      if(!KMode) 
+  94   2                      {
+  95   3                              while(!KMode); pMode=!pMode;
+  96   3                      }
+  97   2                      
+  98   2                      //----
+  99   2                      if(pMode)
+ 100   2                      {
+ 101   3                              Run(Direct,Speed);
+ 102   3                              //----
+ 103   3                              if(!KUp)
+ 104   3                              {
+ 105   4                                      while(!KUp); if(Speed<20) Speed++;
+ 106   4                              }
+ 107   3                              
+ 108   3                              //----
+ 109   3                              if(!KDown)
+ 110   3                              {
+ 111   4                                      while(!KDown); if(Speed >0) Speed--;
+ 112   4                              }
+ 113   3                              
+ 114   3                              //----
+ 115   3                              if(!KDir)
+ 116   3                              {
+ 117   4                                      while(!KDir); pDir=!pDir;
+C51 COMPILER V9.60.0.0   L298_PWM                                                          12/31/2022 13:19:58 PAGE 3   
+
+ 118   4                              }
+ 119   3                              
+ 120   3                              //----
+ 121   3                              if(pDir)        Direct=Fwd;
+ 122   3                              else            Direct=Rev;
+ 123   3                              
+ 124   3                              LcdGoto(1,6); sprintf(&M[0],"Duty  %d%c  ",Speed*5,0x25);  LcdWrStr(&M[0]);     
+ 125   3                              
+ 126   3                              LcdGoto(0,13);  if(Direct==Fwd){LcdWrStr("Fwd");};
+ 127   3                              if(Direct==Rev){LcdWrStr("Rev");};
+ 128   3                              
+ 129   3                              LcdGoto(0,0);LcdWrStr("Run...");
+ 130   3                      }
+ 131   2                      //----
+ 132   2                      else
+ 133   2                      {
+ 134   3                              Stop();
+ 135   3                              LcdClr();
+ 136   3                              LcdGoto(0,0);LcdWrStr("Stop !   ");
+ 137   3                      }
+ 138   2              }
+ 139   1      }
+ 140          
+ 141          
+ 142          //-------------
+ 143          void Timer0_Int(void) interrupt 1
+ 144          {
+ 145   1              Counter++;
+ 146   1              if(Counter>=20)
+ 147   1              {
+ 148   2                      Counter=0;
+ 149   2              }
+ 150   1              
+ 151   1              if(Counter<Duty)        PWM=1;
+ 152   1              else                            PWM=0;
+ 153   1      }
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =    669    ----
+   CONSTANT SIZE    =     57    ----
+   XDATA SIZE       =   ----    ----
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =     27       7
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =   ----       1
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)
